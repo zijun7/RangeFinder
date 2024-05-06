@@ -329,7 +329,7 @@ static unsigned int distance_thermometer(uint32_t microseconds)
 
 
 
-static void handle_sensor_timer(void);
+/*static void handle_sensor_timer(void);
 static void on_pulse_edge(void);
 static uint32_t get_time(void);
 static unsigned int compute_distance_using_adc_value(uint32_t microseconds, uint32_t temperature_register);
@@ -344,7 +344,7 @@ bool volatile object_detected;
 unsigned int volatile distance;
 int volatile speed;
 bool volatile pulse_requested;
-static int calculate_speed(uint32_t current_time, uint32_t last_time);
+static int calculate_speed(uint32_t current_distance, uint32_t last_distance, uint32_t current_time, uint32_t last_time);
 
 
 typedef enum {
@@ -367,9 +367,14 @@ void initialize_sensor(void) {
     thermometer->control = (1 << 20) | (4 << 12) | 3;
 }
 
+
+
 void manage_sensor(void) {
     static char buffer[17];  // 增加缓冲区长度以避免溢出
-    static uint32_t last_time = 0;  // 用于计算速度的时间记忆
+    static uint32_t last_time = 0;  // 上次测量的时间
+    static uint32_t last_distance = 0;  // 上次测量的距离
+    static bool first_measurement = true;  // 判断是否是第一次测量
+
     if (pulse_requested) {
         digitalWrite(TRIGGER, 1);
         pulse_requested = false;
@@ -381,7 +386,8 @@ void manage_sensor(void) {
     if (sensor_state == QUIESCENT) {
         if (object_detected) {
             uint32_t pulse_time = pulse_end_time - pulse_start_time;
-            distance = compute_distance_using_adc_value(pulse_time, 889);  // 假设温度常量，如果需要可以动态调整
+            distance = compute_distance_using_adc_value(pulse_time, 889);
+
             if (distance > 999) {
                 sprintf(buffer, "--no detection--");
                 display_string(0, buffer);
@@ -390,10 +396,20 @@ void manage_sensor(void) {
             } else {
                 sprintf(buffer, "Distance: %3u cm", distance);
                 display_string(0, buffer);
-                speed = calculate_speed(get_time(), last_time);
-                sprintf(buffer, "Speed: %4d cm/s", speed);
-                display_string(1, buffer);
-                last_time = get_time();  // 更新上次时间
+
+                if (!first_measurement) {
+                    uint32_t current_time = get_time();
+                    speed = calculate_speed(distance, last_distance, current_time, last_time);
+                    sprintf(buffer, "Speed: %4d cm/s", speed);
+                    display_string(1, buffer);
+                } else {
+                    sprintf(buffer, "Speed: -- cm/s");
+                    display_string(1, buffer);
+                    first_measurement = false;
+                }
+
+                last_time = get_time();  // 更新时间
+                last_distance = distance;  // 更新距离
             }
         } else {
             sprintf(buffer, "--no detection--");
@@ -406,15 +422,15 @@ void manage_sensor(void) {
     }
 }
 
-
-
-// 如果先前未定义 calculate_speed，这里提供一个示例定义
-static int calculate_speed(uint32_t current_time, uint32_t last_time) {
-    if (last_time == 0) return 0;  // 避免除以零
+// 计算速度
+static int calculate_speed(uint32_t current_distance, uint32_t last_distance, uint32_t current_time, uint32_t last_time) {
+    if (last_time == 0 || current_time == last_time) return 0;  // 避免除以零
+    int distance_diff = current_distance - last_distance;
     int time_diff = current_time - last_time;
-    int speed = (distance * 1000000) / time_diff;  // 单位转换为 cm/s
-    return speed;
+    return (distance_diff * 1000000) / time_diff;  // 单位转换为 cm/s
 }
+
+
 
 static uint32_t get_time(void) {
     cowpi_timer_t volatile *timer = (cowpi_timer_t *)(0x40054000);
@@ -473,5 +489,158 @@ void on_pulse_edge(void) {
         pulse_end_time = get_time();
         sensor_state = ACTIVE_DETECTED;
     }
+}*/
+
+static void handle_sensor_timer(void);
+static void on_pulse_edge(void);
+static uint32_t get_time(void);
+static unsigned int compute_distance_using_adc_value(uint32_t microseconds, uint32_t temperature_register);
+extern operation_mode operationMode;
+static uint32_t volatile pulse_start_time = 0;
+static uint32_t volatile pulse_end_time;
+bool volatile alarm_requested;
+bool volatile object_detected;
+unsigned int volatile distance;
+int volatile speed;
+bool volatile pulse_requested;
+static int calculate_speed(uint32_t current_distance, uint32_t last_distance, uint32_t current_time, uint32_t last_time);
+
+typedef enum {
+    INITIAL_START,
+    POWERING_UP,
+    READY,
+    ACTIVE_LISTENING,
+    ACTIVE_DETECTED,
+    QUIESCENT
+} sensor_state_t;
+
+sensor_state_t volatile sensor_state;
+
+void initialize_sensor(void) {
+    digitalWrite(TRIGGER, 0);
+    sensor_state = INITIAL_START;
+    register_pin_ISR(1 << ECHO, on_pulse_edge);
+    register_timer_ISR(SENSOR_TIMER, 32768, handle_sensor_timer);
 }
 
+void manage_sensor(void) {
+    static char buffer[17];
+    static uint32_t last_time = 0;
+    static uint32_t last_distance = 0;
+    static bool first_measurement = true;
+
+    if (pulse_requested) {
+        digitalWrite(TRIGGER, 1);
+        pulse_requested = false;
+        uint32_t then = get_time();
+        while (get_time() - then < 10) {}
+        digitalWrite(TRIGGER, 0);
+    }
+
+    if (sensor_state == QUIESCENT) {
+        if (object_detected) {
+            uint32_t pulse_time = pulse_end_time - pulse_start_time;
+            if(operationMode == SINGLE_PULSE_OPERATION) {
+                // SINGLE_PULSE_OPERATION
+                distance = compute_distance_using_adc_value(pulse_time, 889); // 使用固定温度值进行距离计算
+                if (distance > 999) {
+                    sprintf(buffer, "--no detection--");
+                    display_string(0, buffer);
+                    buffer[0] = '\0';
+                    display_string(1, buffer);
+                } else {
+                    sprintf(buffer, "Distance: %3u cm", distance);
+                    display_string(0, buffer);
+                    sprintf(buffer, "Speed: -- cm/s"); // 在单次脉冲操作模式下不计算速度
+                    display_string(1, buffer);
+                }
+            } else if(operationMode == NORMAL_OPERATIONS) {
+                // NORMAL_OPERATIONS
+                distance = compute_distance_using_adc_value(pulse_time, 889);
+                if (distance > 999) {
+                    sprintf(buffer, "--no detection--");
+                    display_string(0, buffer);
+                    buffer[0] = '\0';
+                    display_string(1, buffer);
+                } else {
+                    sprintf(buffer, "Distance: %3u cm", distance);
+                    display_string(0, buffer);
+
+                    if (!first_measurement) {
+                        uint32_t current_time = get_time();
+                        speed = calculate_speed(distance, last_distance, current_time, last_time);
+                        sprintf(buffer, "Speed: %4d cm/s", speed);
+                        display_string(1, buffer);
+                    } else {
+                        sprintf(buffer, "Speed: -- cm/s");
+                        display_string(1, buffer);
+                        first_measurement = false;
+                    }
+
+                    last_time = get_time();  // 更新时间
+                    last_distance = distance;  // 更新距离
+                }
+            }
+        } else {
+            sprintf(buffer, "--no detection--");
+            display_string(0, buffer);
+            buffer[0] = '\0';
+            display_string(1, buffer);
+        }
+    } else if (sensor_state == READY) {
+        pulse_requested = true;
+    }
+}
+
+// 其余函数和之前相同，无需改动。
+
+
+static unsigned int compute_distance_using_adc_value(uint32_t microseconds, uint32_t temperature_register) {
+    return (unsigned int)((uint64_t)microseconds * ((256108888LL - 121907LL * 889)) >> 33);
+}
+
+static int calculate_speed(uint32_t current_distance, uint32_t last_distance, uint32_t current_time, uint32_t last_time) {
+    if (last_time == 0 || current_time == last_time) return 0;
+    int distance_diff = current_distance - last_distance;
+    int time_diff = current_time - last_time;
+    return (distance_diff * 1000000) / time_diff;
+}
+
+static uint32_t get_time(void) {
+    cowpi_timer_t volatile *timer = (cowpi_timer_t *)(0x40054000);
+    return timer->raw_lower_word;
+}
+
+void handle_sensor_timer(void) {
+    switch(sensor_state) {
+        case INITIAL_START:
+        case POWERING_UP:
+            sensor_state = READY;
+            break;
+        case ACTIVE_LISTENING:
+            object_detected = false;
+            sensor_state = QUIESCENT;
+            break;
+        case ACTIVE_DETECTED:
+            object_detected = true;
+            sensor_state = QUIESCENT;
+            break;
+        case QUIESCENT:
+            sensor_state = READY;
+            break;
+        default:
+            break;
+    }
+}
+
+void on_pulse_edge(void) {
+    static bool rising_edge = false;
+    rising_edge = digitalRead(ECHO);
+    if (rising_edge) {
+        pulse_start_time = get_time();
+        sensor_state = ACTIVE_LISTENING;
+    } else {
+        pulse_end_time = get_time();
+        sensor_state = ACTIVE_DETECTED;
+    }
+}

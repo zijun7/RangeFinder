@@ -523,44 +523,53 @@ void initialize_sensor(void) {
     register_timer_ISR(SENSOR_TIMER, 32768, handle_sensor_timer);
 }
 
+
+
+
 void manage_sensor(void) {
-    static char buffer[17];
-    static uint32_t last_time = 0;
-    static uint32_t last_distance = 0;
-    static bool first_measurement = true;
+    static char buffer[17];  // Buffer for display
+    static uint32_t last_time = 0;  // Used for speed calculation
+    static uint32_t last_distance = 0;  // Used for speed calculation
+    static bool first_measurement = true;  // Flag to check if it's the first measurement
 
     if (pulse_requested) {
         digitalWrite(TRIGGER, 1);
         pulse_requested = false;
         uint32_t then = get_time();
-        while (get_time() - then < 10) {}
+        while (get_time() - then < 10) {}  // Minimum pulse time
         digitalWrite(TRIGGER, 0);
     }
 
     if (sensor_state == QUIESCENT) {
         if (object_detected) {
             uint32_t pulse_time = pulse_end_time - pulse_start_time;
-            if(operationMode == SINGLE_PULSE_OPERATION) {
-                // SINGLE_PULSE_OPERATION
-                distance = compute_distance_using_adc_value(pulse_time, 889); // 使用固定温度值进行距离计算
+            if (operationMode == SINGLE_PULSE_OPERATION) {
+                distance = compute_distance_using_adc_value(pulse_time, 889); // Hard-coded temperature register value for simplicity
+
                 if (distance > 999) {
                     sprintf(buffer, "--no detection--");
                     display_string(0, buffer);
-                    buffer[0] = '\0';
-                    display_string(1, buffer);
+                    display_string(1, ""); // Clear second line
                 } else {
                     sprintf(buffer, "Distance: %3u cm", distance);
                     display_string(0, buffer);
-                    sprintf(buffer, "Speed: -- cm/s"); // 在单次脉冲操作模式下不计算速度
-                    display_string(1, buffer);
+                    cowpi_illuminate_right_led();  // Strobe LED once for feedback
+                    if (distance < threshold_range) {
+                        digitalWrite(BUZZER, 1);  // Emit one chirp
+                        delay(100);  // Duration of chirp
+                        digitalWrite(BUZZER, 0);
+                    }
+                    display_string(1, ""); // Clear second line since speed is not displayed in this mode
                 }
-            } else if(operationMode == NORMAL_OPERATIONS) {
-                // NORMAL_OPERATIONS
-                distance = compute_distance_using_adc_value(pulse_time, 889);
+                sensor_state = READY; // Wait for next pulse request
+            } else {
+                // Normal operations and other modes
+                distance = compute_distance_using_adc_value(pulse_time, 889); // Use the same function for distance calculation
+
                 if (distance > 999) {
                     sprintf(buffer, "--no detection--");
                     display_string(0, buffer);
-                    buffer[0] = '\0';
+                    buffer[0] = '\0';  // Clear buffer
                     display_string(1, buffer);
                 } else {
                     sprintf(buffer, "Distance: %3u cm", distance);
@@ -577,8 +586,8 @@ void manage_sensor(void) {
                         first_measurement = false;
                     }
 
-                    last_time = get_time();  // 更新时间
-                    last_distance = distance;  // 更新距离
+                    last_time = get_time();
+                    last_distance = distance;
                 }
             }
         } else {
@@ -587,10 +596,13 @@ void manage_sensor(void) {
             buffer[0] = '\0';
             display_string(1, buffer);
         }
-    } else if (sensor_state == READY) {
+    } else if (sensor_state == READY && operationMode == NORMAL_OPERATION) {
         pulse_requested = true;
     }
 }
+
+
+
 
 // 其余函数和之前相同，无需改动。
 

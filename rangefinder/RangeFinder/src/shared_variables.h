@@ -53,7 +53,9 @@ typedef struct {
 } adc_t;
 #endif //PICO
 
-
+typedef enum {
+  NORMAL_OPERATIONS, SINGLE_PULSE_OPERATION, THRESHOLD_ADJUSTMENT, CONTINUOUS_TONE
+} system_mode_t;
 
 /* IF YOU NEED TO CREATE ANY GLOBAL VARIABLES
    THAT MUST BE SHARED BETWEEN .c FILES, THEN:
@@ -62,9 +64,17 @@ typedef struct {
     - DECLARE THEM HERE AS AN extern volatile VARIABLE
       example:   extern unsigned long volatile foo;
 */
+#define SENSOR_TIMER (1)
+#define ALARM_TIMER (2)
 
-
-
+extern system_mode_t system_mode;
+extern bool volatile alarm_requested;
+extern bool volatile pulse_requested;
+extern bool volatile object_detected;
+extern unsigned int volatile distance;
+extern unsigned int threshold_range;
+extern int volatile speed;
+extern bool volatile one_second_has_elapsed;
 
 /*** DO NOT PLACE ANY CODE BELOW THIS LINE! ***/
 

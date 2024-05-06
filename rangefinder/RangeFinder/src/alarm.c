@@ -24,14 +24,18 @@
 #include "interrupt_support.h"
 
 
-const unsigned int on_period = 500;          // a made-up number, probably not the value you want to use
+const unsigned int on_period = 100;          // a made-up number, probably not the value you want to use
 volatile unsigned int total_period = 50000;
 void TimerInterruptHandler(void);
 bool volatile Ping;
+bool shouldSoundAlarm = false; 
+bool shouldIlluminate = false;
+static unsigned int ISR_count = 0;
+//const unsigned long volatile one_second_has_elapsed = false;
 
 void initialize_alarm(void) {
-
-    register_timer_ISR(0, 100, TimerInterruptHandler);
+    threshold_range = 100;
+    register_timer_ISR(ALARM_TIMER, 500, TimerInterruptHandler);
 }
 
 void manage_alarm(void) {
@@ -39,10 +43,6 @@ void manage_alarm(void) {
 }
 
 void TimerInterruptHandler(void){
-    //unsigned int ISR_count = -1;
-    bool shouldSoundAlarm = false; 
-    bool shouldIlluminate = false;
-    static unsigned int ISR_count = -1;
 
     ISR_count = ISR_count + 1;
     if (ISR_count > total_period){
@@ -59,7 +59,7 @@ void TimerInterruptHandler(void){
             break;
         case SINGLE_PULSE_OPERATION:
             if (Ping){
-                shouldSoundAlarm = true;
+                shouldSoundAlarm = (distance <= threshold_range);
                 shouldIlluminate = true;
                 ISR_count = 0;
                 Ping = false;
@@ -68,11 +68,9 @@ void TimerInterruptHandler(void){
                 shouldIlluminate = false;
             }
             break;
-        case THRESHOLD_ADJUSTMENT:
-            shouldSoundAlarm = false;
-            break;
         case CONTINUOUS_TONE:
             shouldSoundAlarm = true;
+            shouldIlluminate = false;
             ISR_count = 0;
             break;
         default:
@@ -89,6 +87,4 @@ void TimerInterruptHandler(void){
         cowpi_deluminate_right_led();
     }
 
-
 }
-

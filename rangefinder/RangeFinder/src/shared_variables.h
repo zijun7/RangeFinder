@@ -53,10 +53,6 @@ typedef struct {
 } adc_t;
 #endif //PICO
 
-typedef enum {
-  NORMAL_OPERATIONS, SINGLE_PULSE_OPERATION, THRESHOLD_ADJUSTMENT, CONTINUOUS_TONE
-} system_mode_t;
-
 /* IF YOU NEED TO CREATE ANY GLOBAL VARIABLES
    THAT MUST BE SHARED BETWEEN .c FILES, THEN:
     - DECLARE THEM IN *ONE AND ONLY ONE* .c FILE AS A volatile VARIABLE
@@ -64,10 +60,18 @@ typedef enum {
     - DECLARE THEM HERE AS AN extern volatile VARIABLE
       example:   extern unsigned long volatile foo;
 */
+typedef enum {
+    NORMAL_OPERATION,
+    SINGLE_PULSE_OPERATION,
+    THRESHOLD_ADJUSTMENT,
+    CONTINUOUS_TONE
+}operation_mode;
+
 #define SENSOR_TIMER (1)
 #define ALARM_TIMER (2)
 
-extern system_mode_t system_mode;
+extern operation_mode operationMode;
+extern bool volatile Ping;
 extern bool volatile alarm_requested;
 extern bool volatile pulse_requested;
 extern bool volatile object_detected;

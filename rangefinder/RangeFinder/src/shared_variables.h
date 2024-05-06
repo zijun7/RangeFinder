@@ -70,7 +70,7 @@ typedef enum {
 #define SENSOR_TIMER (1)
 #define ALARM_TIMER (2)
 
-extern operation_mode operationMode;
+operation_mode operationMode;
 extern bool volatile Ping;
 extern bool volatile alarm_requested;
 extern bool volatile pulse_requested;

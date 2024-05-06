@@ -34,12 +34,30 @@ static unsigned int ISR_count = 0;
 //const unsigned long volatile one_second_has_elapsed = false;
 
 void initialize_alarm(void) {
-    threshold_range = 100;
+    threshold_range = 400;
     register_timer_ISR(ALARM_TIMER, 500, TimerInterruptHandler);
 }
 
 void manage_alarm(void) {
-
+    unsigned int total_period_milliseconds;
+    if (distance < 10){
+        total_period_milliseconds = 125;
+    }else if (distance < 25){
+        total_period_milliseconds = 250;
+    }else if (distance < 50){
+        total_period_milliseconds = 500;
+    }else if (distance < 100){
+        total_period_milliseconds = 750;
+    }else if (distance < 150){
+        total_period_milliseconds = 1000;
+    }else if (distance < 200){
+        total_period_milliseconds = 1500;
+    }else if (distance < 250){
+        total_period_milliseconds = 2000;
+    }else {
+        total_period_milliseconds = 2500;
+    }
+    total_period = total_period_milliseconds * 2;
 }
 
 void TimerInterruptHandler(void){
@@ -55,7 +73,15 @@ void TimerInterruptHandler(void){
 
     switch(operationMode){
         case NORMAL_OPERATION:
-            shouldSoundAlarm = false;
+            if (object_detected){
+                shouldSoundAlarm = (distance < threshold_range);
+                shouldIlluminate = true;
+            }else if(ISR_count < total_period){
+                shouldIlluminate = false;
+                shouldSoundAlarm = false;
+            }else {
+                ISR_count = 0;
+            }
             break;
         case SINGLE_PULSE_OPERATION:
             if (Ping){
@@ -72,6 +98,10 @@ void TimerInterruptHandler(void){
             shouldSoundAlarm = true;
             shouldIlluminate = false;
             ISR_count = 0;
+            break;
+        case THRESHOLD_ADJUSTMENT:
+            shouldSoundAlarm = false;
+            shouldIlluminate = false;
             break;
         default:
             break;

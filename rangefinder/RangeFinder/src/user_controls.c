@@ -28,6 +28,9 @@
 
 operation_mode operationMode;
 bool volatile Ping;
+static char buffer[17] = {0};
+unsigned int thresholdInput(void);
+extern unsigned threshold_range = 100; 
 
 void initialize_controls(void) {
     Ping = false;
@@ -50,21 +53,59 @@ void manage_controls(void) {
     static bool button_is_pressed = false;
     switch (operationMode)
     {
-    case SINGLE_PULSE_OPERATION:
-        ;
-        bool new_button_position;
-        if ((new_button_position = cowpi_debounce_byte(cowpi_left_button_is_pressed(), LEFT_BUTTON_DOWN)) != button_is_pressed){
-            button_is_pressed = new_button_position;
-            if (button_is_pressed && operationMode == SINGLE_PULSE_OPERATION){
-                Ping = true;
+        case SINGLE_PULSE_OPERATION:
+            ;
+            bool new_button_position;
+            if ((new_button_position = cowpi_debounce_byte(cowpi_left_button_is_pressed(), LEFT_BUTTON_DOWN)) != button_is_pressed){
+                button_is_pressed = new_button_position;
+                if (button_is_pressed && operationMode == SINGLE_PULSE_OPERATION){
+                    Ping = true;
+                }
             }
-        }
-        break;
-    
-    default:
-        break;
+            break;
+        case THRESHOLD_ADJUSTMENT:
+            threshold_range = thresholdInput();
+            break;
+        default:
+            break;
     }
-
-
 }
 
+    unsigned int thresholdInput(void){
+        //sprintf(buffer, "Adjust Threshold");
+        buffer[0] = '\0';
+        //display_string(2, buffer);
+        //display_string(3, buffer);
+        //display_string(4, buffer);
+        unsigned int range;
+        do{
+            sprintf(buffer,"Input threshold");
+            display_string(0, buffer);
+            //sprintf(buffer,"Range     cm");
+            //display_string(1, buffer);
+            range = 0;
+            char c;
+            do{
+                refresh_display();
+                while((c = cowpi_debounce_byte(cowpi_get_keypress(), KEYPAD)) != '\0') {};
+                do{
+                    c = cowpi_debounce_byte(cowpi_get_keypress(), KEYPAD);
+                }while(!(c == '#' || (c >= '0' && c <= '9')));
+                if (c >= '0' && c <= '9'){
+                    range = 10 * range + (c - '0');
+                    if (range < 1000){
+                        sprintf(buffer, "Range:     %3ucm", range);
+                        display_string(1,buffer);
+                    }
+                    while ((c = cowpi_debounce_byte(cowpi_get_keypress(), KEYPAD)) != '\0') {};
+                }
+            }while (c != '#');
+            if ( range < 50 || range > 400){
+                sprintf (buffer, "%2d < rng < %3d", 49, 401);
+                display_string(0,buffer);
+            }
+        }while (range < 50 || range > 400);
+        sprintf(buffer,"Threshold  %3ucm", range);
+        display_string(1, buffer);
+        return range;
+    }

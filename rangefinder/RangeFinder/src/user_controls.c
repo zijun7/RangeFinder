@@ -37,7 +37,7 @@ void initialize_controls(void) {
 }
 
 void manage_controls(void) {
-    //static operation_mode pMode = -1;
+    static operation_mode pMode = -1;
 
     if (cowpi_debounce_byte(cowpi_left_switch_is_in_left_position(), LEFT_SWITCH_LEFT) && cowpi_debounce_byte(cowpi_right_switch_is_in_left_position(),RIGHT_SWITCH_LEFT)){
         operationMode = NORMAL_OPERATION;
@@ -60,29 +60,41 @@ void manage_controls(void) {
                 button_is_pressed = new_button_position;
                 if (button_is_pressed && operationMode == SINGLE_PULSE_OPERATION){
                     Ping = true;
+                    pulse_requested = true;
                 }
             }
             break;
         case THRESHOLD_ADJUSTMENT:
-            threshold_range = thresholdInput();
+            if (operationMode != pMode){
+                threshold_range = thresholdInput();
+            }
+            Ping = false;
+            pulse_requested = false;
+            break;
+        case CONTINUOUS_TONE:
+            break;
+        case NORMAL_OPERATION:
             break;
         default:
             break;
     }
+
+    if (operationMode != pMode){
+        pMode = operationMode;
+        /*sprintf(buffer, "%d  %d", operationMode, pMode);
+        display_string(3,buffer);
+        sprintf(buffer, "%d", threshold_range);
+        display_string(4, buffer);*/
+    }
 }
 
     unsigned int thresholdInput(void){
-        //sprintf(buffer, "Adjust Threshold");
         buffer[0] = '\0';
-        //display_string(2, buffer);
-        //display_string(3, buffer);
-        //display_string(4, buffer);
+        display_string(2, buffer);
         unsigned int range;
         do{
             sprintf(buffer,"Input threshold");
             display_string(0, buffer);
-            //sprintf(buffer,"Range     cm");
-            //display_string(1, buffer);
             range = 0;
             char c;
             do{
@@ -90,6 +102,9 @@ void manage_controls(void) {
                 while((c = cowpi_debounce_byte(cowpi_get_keypress(), KEYPAD)) != '\0') {};
                 do{
                     c = cowpi_debounce_byte(cowpi_get_keypress(), KEYPAD);
+                    if (!cowpi_debounce_byte(cowpi_left_switch_is_in_right_position(), LEFT_SWITCH_RIGHT) ||!cowpi_debounce_byte(cowpi_right_switch_is_in_right_position(), RIGHT_SWITCH_RIGHT)) {
+                        return range;
+                    }
                 }while(!(c == '#' || (c >= '0' && c <= '9')));
                 if (c >= '0' && c <= '9'){
                     range = 10 * range + (c - '0');

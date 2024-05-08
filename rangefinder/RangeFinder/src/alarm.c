@@ -31,7 +31,6 @@ bool volatile Ping;
 bool shouldSoundAlarm = false; 
 bool shouldIlluminate = false;
 static unsigned int ISR_count = 0;
-//const unsigned long volatile one_second_has_elapsed = false;
 
 void initialize_alarm(void) {
     threshold_range = 400;
@@ -106,6 +105,7 @@ void TimerInterruptHandler(void){
         default:
             break;
     }
+
 
     if (shouldSoundAlarm){
         digitalWrite(BUZZER, buzzerState);
